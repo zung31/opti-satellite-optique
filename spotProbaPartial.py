@@ -10,11 +10,9 @@
 # on charge le solveur lineaire
 from pyscipopt import Model, quicksum
 from itertools import product
-import os
-import tempfile
 
 # on charge les données
-from spotProba1 import nbImages, nbInstruments, PA, DD, AN, VI, DU, TY, PM, PMmax, Failure, ProbaInf, ProbaSup
+from spotProba3 import nbImages, nbInstruments, PA, DD, AN, VI, DU, TY, PM, PMmax, Failure, ProbaInf, ProbaSup
 
 
 # creation du modele lineaire
@@ -47,6 +45,27 @@ mymodel.setObjective(quicksum(PA[i] * selection[i] for i in range(nbImages)), se
 # ajout des contraintes au modele
 ################################
 
+#contrainte de memoire
+mymodel.addCons(
+    quicksum(PM[i] * selection[i] for i in range(nbImages)) <= PMmax
+)
+
+#lien entre selection et affectation
+#pour une image mono 
+for i in range(nbImages):
+    if TY[i] == 1:
+        mymodel.addCons(
+            quicksum(assignedTo[i][ins] for ins in range(nbInstruments))
+            == selection[i]
+        )
+
+#pour une image stereo
+for i in range(nbImages):
+    if TY[i] == 2:
+        mymodel.addCons(assignedTo[i][0] == selection[i])
+        mymodel.addCons(assignedTo[i][1] == 0)
+        mymodel.addCons(assignedTo[i][2] == selection[i])
+
 # la contrainte de non chevauchement
 # considérons un instrument
 # si, sur cet insrument, le temps de transition entre 2 images ima1 et ima2 
@@ -58,19 +77,7 @@ for ima1,ima2 in product(range(nbImages), range(nbImages)):
         for ins in range(nbInstruments):
             if  abs(DD[ima1][ins] - DD[ima2][ins]) * VI < DU * VI + abs(AN[ima1][ins] - AN[ima2][ins]):
                 mymodel.addCons(assignedTo[ima1][ins] + assignedTo[ima2][ins] <= 1)
-
-# ajouter contraintes: memoire, meteo, 
-
-# contrainte de memoire
-sum_memoire = 0
-for j_img in range(nbImages):
-    sum_memoire += PM[j_img] * selection[j_img]
-mymodel.addCons(sum_memoire <= PMmax)
-
-# Les images st´er´eo doivent être réalis´ees sur les instruments 1 et 3; les images mono peuvent être réalisées par n’importe quel instrument
-# contrainte de stereo
-# for j_ins in range(nbImages):
-#     if TY[j_ins] == 2:
+                
 
  
                 
@@ -78,12 +85,7 @@ mymodel.addCons(sum_memoire <= PMmax)
 #########################################
 
 #visualiser le problem lineaire cree
-# le dossier du projet contient des caractères accentués (ex: "données"),
-# ce que SCIP (bibliothèque C) ne sait pas gérer pour écrire un fichier sous Windows.
-# On écrit donc pb.cip dans le dossier temporaire du système, qui ne contient pas d'accents.
-pb_path = os.path.join(tempfile.gettempdir(), "pb.cip")
-mymodel.writeProblem(pb_path)
-print("Problème écrit dans : " + pb_path)
+mymodel.writeProblem("pb.cip")
 
 # lancer l'optimisation
 print("Resolution")
