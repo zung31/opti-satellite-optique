@@ -10,11 +10,9 @@
 # on charge le solveur lineaire
 from pyscipopt import Model, quicksum
 from itertools import product
-import os
-import tempfile
 
 # on charge les données
-from spotProba1 import nbImages, nbInstruments, PA, DD, AN, VI, DU, TY, PM, PMmax, Failure, ProbaInf, ProbaSup
+from spotProba4 import nbImages, nbInstruments, PA, DD, AN, VI, DU, TY, PM, PMmax, Failure, ProbaInf, ProbaSup
 
 
 # creation du modele lineaire
@@ -40,9 +38,31 @@ for i in range(nbImages):
 ######################
 
 # en l'absence d'incertitude, on maximise la somme des payoff
-mymodel.setObjective(quicksum(PA[i] * selection[i] for i in range(nbImages)), sense='maximize')
+#mymodel.setObjective(quicksum(PA[i] * (1 - ProbaSup[i]) * selection[i] for i in range(nbImages)), sense='maximize')
 
+gain_mono = quicksum(
+    PA[i] * (1 - ProbaSup[i]) *
+    quicksum(
+        (1 - Failure[j]) * assignedTo[i][j]
+        for j in range(nbInstruments)
+    )
+    for i in range(nbImages)
+    if TY[i] == 1
+)
 
+gain_stereo = quicksum(
+    PA[i] * (1 - ProbaSup[i])
+    * (1 - Failure[0])
+    * (1 - Failure[2])
+    * selection[i]
+    for i in range(nbImages)
+    if TY[i] == 2
+)
+
+mymodel.setObjective(
+    gain_mono + gain_stereo,
+    sense='maximize'
+)
 
 # ajout des contraintes au modele
 ################################
@@ -59,31 +79,31 @@ for ima1,ima2 in product(range(nbImages), range(nbImages)):
             if  abs(DD[ima1][ins] - DD[ima2][ins]) * VI < DU * VI + abs(AN[ima1][ins] - AN[ima2][ins]):
                 mymodel.addCons(assignedTo[ima1][ins] + assignedTo[ima2][ins] <= 1)
 
-# ajouter contraintes: memoire, meteo, 
 
-# contrainte de memoire
-sum_memoire = 0
-for j_img in range(nbImages):
-    sum_memoire += PM[j_img] * selection[j_img]
-mymodel.addCons(sum_memoire <= PMmax)
+## contrainte de capacité mémoire
+#1. Le satellite ne peut pas mémoriser plus d’images que ce que permet sa mémoire
+somme = 0
+for i in range(nbImages):
+    somme += PM[i] * selection[i]
+mymodel.addCons(somme <= PMmax)
 
-# Les images st´er´eo doivent être réalis´ees sur les instruments 1 et 3; les images mono peuvent être réalisées par n’importe quel instrument
-# contrainte de stereo
-# for j_ins in range(nbImages):
-#     if TY[j_ins] == 2:
+## contrainte d'affectation des images aux instruments
+#3. Les images stéréo doivent être réalisées sur les instruments 1 et 3; les images mono peuvent être réalisées
+#par n'importe quel instrument
+
+for i in range(nbImages):
+    if TY[i] == 2:
+        mymodel.addCons(assignedTo[i][0] + assignedTo[i][2] == 2* selection[i])
+    if TY[i] == 1:
+        mymodel.addCons(assignedTo[i][0] + assignedTo[i][1] + assignedTo[i][2] == selection[i])
 
  
-                
+             
 # resolution et affichage des resulats
 #########################################
 
 #visualiser le problem lineaire cree
-# le dossier du projet contient des caractères accentués (ex: "données"),
-# ce que SCIP (bibliothèque C) ne sait pas gérer pour écrire un fichier sous Windows.
-# On écrit donc pb.cip dans le dossier temporaire du système, qui ne contient pas d'accents.
-pb_path = os.path.join(tempfile.gettempdir(), "pb.cip")
-mymodel.writeProblem(pb_path)
-print("Problème écrit dans : " + pb_path)
+mymodel.writeProblem("pb.cip")
 
 # lancer l'optimisation
 print("Resolution")
