@@ -124,11 +124,6 @@ def construire_modele(nbImages, nbInstruments, PA, DD, AN, VI, DU, TY, PM, PMmax
         else:
             mymodel.addCons(selection[j_img] * TY[j_img] == quicksum(assignedTo[j_img][ins] for ins in range(nbInstruments)))
 
-    # contraint assignedTo <= 1
-    for j_img in range(nbImages):
-        for i_ins in range(nbInstruments):
-            mymodel.addCons(assignedTo[j_img][i_ins] <= 1)
-
     # images imposees (diagnostic)
     for i in forcer:
         mymodel.addCons(selection[i] == 1)
