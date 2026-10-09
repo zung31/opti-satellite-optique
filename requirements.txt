@@ -1,0 +1,4 @@
+pyscipopt>=5.0
+streamlit>=1.40
+pandas>=2.0
+matplotlib>=3.8
